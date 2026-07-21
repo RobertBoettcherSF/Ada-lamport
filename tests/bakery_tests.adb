@@ -3,7 +3,7 @@
 -- ============================================================================
 --
 -- This test suite validates Lamport's Bakery Algorithm implementation.
--- It tests for 12+ different assumptions and edge cases.
+-- It tests for 15 different assumptions and edge cases.
 --
 -- Tests are designed to be proven false (falsifiable) - each test either
 -- passes (assumption holds) or fails (assumption is false).
@@ -13,9 +13,9 @@
 -- ============================================================================
 
 with Ada.Text_IO;
-with Ada.Integer_Text_IO;
 with Ada.Real_Time;
 use type Ada.Real_Time.Time;
+use type Ada.Real_Time.Time_Span;
 
 procedure Bakery_Tests is
 
@@ -110,7 +110,7 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Single_Thread_Lock is
-      Id : Thread_Id := 1;
+      Id : constant Thread_Id := 1;
    begin
       Start_Test ("Single thread lock/unlock");
       
@@ -119,6 +119,7 @@ procedure Bakery_Tests is
       
       -- Verify thread has a ticket number
       if Number (Id) = 0 then
+         Unlock (Id);
          End_Test (False);
          return;
       end if;
@@ -141,8 +142,12 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Unique_Ticket_Numbers is
-      Id1, Id2, Id3 : Thread_Id := 1, 2, 3;
-      Num1, Num2, Num3 : Natural;
+      Id1 : constant Thread_Id := 1;
+      Id2 : constant Thread_Id := 2;
+      Id3 : constant Thread_Id := 3;
+      Num1 : Natural;
+      Num2 : Natural;
+      Num3 : Natural;
    begin
       Start_Test ("Unique increasing ticket numbers");
       
@@ -253,7 +258,7 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Reentrant_Lock is
-      Id : Thread_Id := 1;
+      Id : constant Thread_Id := 1;
    begin
       Start_Test ("Reentrant lock (expected to fail - not reentrant)");
       
@@ -266,8 +271,9 @@ procedure Bakery_Tests is
       -- Try to lock again - this should deadlock or fail
       -- We'll use a timeout to detect deadlock
       declare
-         Start_Time : Ada.Real_Time.Time := Ada.Real_Time.Clock;
+         Start_Time : constant Ada.Real_Time.Time := Ada.Real_Time.Clock;
          Timeout : constant Ada.Real_Time.Time_Span := Ada.Real_Time.Milliseconds (100);
+         Current_Time : Ada.Real_Time.Time;
       begin
          -- Try second lock with timeout
          begin
@@ -284,7 +290,8 @@ procedure Bakery_Tests is
          end;
          
          -- Check if we timed out
-         if Ada.Real_Time.Clock - Start_Time > Timeout then
+         Current_Time := Ada.Real_Time.Clock;
+         if Current_Time - Start_Time > Timeout then
             -- Deadlock detected - lock is not reentrant (correct behavior)
             End_Test (True);
             return;
@@ -302,7 +309,7 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Ticket_Overflow is
-      Id : Thread_Id := 1;
+      Id : constant Thread_Id := 1;
    begin
       Start_Test ("Ticket number overflow handling");
       
@@ -318,6 +325,7 @@ procedure Bakery_Tests is
       
       -- The new ticket should be higher than the previous
       if Number (Id) <= Natural'Last - 10 then
+         Unlock (Id);
          End_Test (False);
          return;
       end if;
@@ -333,8 +341,8 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Tie_Breaking_By_Id is
-      Id1, Id2 : Thread_Id := 2, 1; -- Id2 has lower ID
-      Num1, Num2 : Natural;
+      Id1 : constant Thread_Id := 2;
+      Id2 : constant Thread_Id := 1; -- Id2 has lower ID
    begin
       Start_Test ("Tie breaking by thread ID");
       
@@ -348,7 +356,6 @@ procedure Bakery_Tests is
       
       -- Thread 2 tries to lock
       Lock (Id1);
-      Num1 := Number (Id1);
       
       -- Thread 1 (lower ID) should be able to lock and get a new number
       -- But actually, thread 1 should wait for thread 2 since they have same number
@@ -373,7 +380,8 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Entering_Flag is
-      Id1, Id2 : Thread_Id := 1, 2;
+      Id1 : constant Thread_Id := 1;
+      Id2 : constant Thread_Id := 2;
    begin
       Start_Test ("Entering flag prevents doorway race");
       
@@ -409,7 +417,7 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Unlock_Resets_Ticket is
-      Id : Thread_Id := 1;
+      Id : constant Thread_Id := 1;
    begin
       Start_Test ("Unlock resets ticket to 0");
       
@@ -444,7 +452,7 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Multiple_Lock_Cycles is
-      Id : Thread_Id := 1;
+      Id : constant Thread_Id := 1;
    begin
       Start_Test ("Multiple lock/unlock cycles");
       
@@ -568,7 +576,9 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_FIFO_Ordering is
-      Id1, Id2, Id3 : Thread_Id := 1, 2, 3;
+      Id1 : constant Thread_Id := 1;
+      Id2 : constant Thread_Id := 2;
+      Id3 : constant Thread_Id := 3;
       Entry_Order : array (Thread_Id) of Natural := (others => 0);
       Order_Counter : Natural := 0;
       
@@ -746,7 +756,7 @@ procedure Bakery_Tests is
    -- =========================================================================
 
    procedure Test_Unlock_Without_Lock is
-      Id : Thread_Id := 1;
+      Id : constant Thread_Id := 1;
    begin
       Start_Test ("Unlock without prior lock");
       
