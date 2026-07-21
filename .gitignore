@@ -1,5 +1,22 @@
-# Object file
+# Build directories
+obj/
+bin/
+
+# Object files
 *.o
 
 # Ada Library Information
 *.ali
+
+# Executable files
+bakery
+bakery_tests
+
+# Backup files
+*.bak
+*.swp
+
+# IDE specific
+.idea/
+.vscode/
+*.iml
