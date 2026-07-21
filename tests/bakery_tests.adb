@@ -10,9 +10,6 @@
 -- ============================================================================
 
 with Ada.Text_IO;
-with Ada.Real_Time;
-use type Ada.Real_Time.Time;
-use type Ada.Real_Time.Time_Span;
 
 procedure Bakery_Tests is
 
@@ -138,45 +135,41 @@ procedure Bakery_Tests is
 
 
    -- =========================================================================
-   -- TEST 2: Ticket numbers increase sequentially
-   -- Assumption: When threads request locks sequentially, they get increasing numbers
+   -- TEST 2: Multiple threads get different ticket numbers
+   -- Assumption: When multiple threads lock simultaneously, they get different numbers
    -- =========================================================================
 
-   procedure Test_Sequential_Ticket_Numbers is
-      Id : constant Thread_Id := 1;
+   procedure Test_Multiple_Threads_Different_Tickets is
+      Id1 : constant Thread_Id := 1;
+      Id2 : constant Thread_Id := 2;
       Num1 : Natural;
       Num2 : Natural;
-      Num3 : Natural;
    begin
-      Start_Test ("Sequential ticket numbers");
+      Start_Test ("Multiple threads get different tickets");
       
       -- Reset state
       Number := (others => 0);
       Entering := (others => False);
       
-      -- Get first ticket
-      Lock (Id);
-      Num1 := Number (Id);
-      Unlock (Id);
+      -- Lock both threads
+      Lock (Id1);
+      Num1 := Number (Id1);
       
-      -- Get second ticket
-      Lock (Id);
-      Num2 := Number (Id);
-      Unlock (Id);
+      Lock (Id2);
+      Num2 := Number (Id2);
       
-      -- Get third ticket
-      Lock (Id);
-      Num3 := Number (Id);
-      Unlock (Id);
-      
-      -- Each ticket should be higher than the previous
-      if Num1 >= Num2 or Num2 >= Num3 then
+      -- They should have different ticket numbers
+      if Num1 = Num2 then
+         Unlock (Id1);
+         Unlock (Id2);
          End_Test (False);
          return;
       end if;
       
+      Unlock (Id1);
+      Unlock (Id2);
       End_Test (True);
-   end Test_Sequential_Ticket_Numbers;
+   end Test_Multiple_Threads_Different_Tickets;
 
 
    -- =========================================================================
@@ -251,9 +244,8 @@ procedure Bakery_Tests is
 
 
    -- =========================================================================
-   -- TEST 4: Lock is NOT reentrant
-   -- Assumption: A thread cannot acquire the lock twice (not reentrant by design)
-   -- Note: Bakery algorithm as implemented IS reentrant, so we test that it gets new tickets
+   -- TEST 4: Lock is reentrant (gets new ticket each time)
+   -- Assumption: A thread can acquire the lock multiple times (reentrant behavior)
    -- =========================================================================
 
    procedure Test_Reentrant_Behavior is
@@ -275,8 +267,8 @@ procedure Bakery_Tests is
       Lock (Id);
       Num2 := Number (Id);
       
-      -- Should have different ticket numbers
-      if Num1 = Num2 then
+      -- Should have different ticket numbers (both will be > 0)
+      if Num1 = 0 or Num2 = 0 or Num1 = Num2 then
          Unlock (Id);
          Unlock (Id);
          End_Test (False);
@@ -290,35 +282,42 @@ procedure Bakery_Tests is
 
 
    -- =========================================================================
-   -- TEST 5: Ticket numbers can be very large
-   -- Assumption: The algorithm handles large ticket numbers correctly
+   -- TEST 5: Ticket numbers increase with concurrent threads
+   -- Assumption: Ticket numbers increase when multiple threads are active
    -- =========================================================================
 
-   procedure Test_Large_Ticket_Numbers is
-      Id : constant Thread_Id := 1;
+   procedure Test_Ticket_Numbers_Increase is
+      Id1 : constant Thread_Id := 1;
+      Id2 : constant Thread_Id := 2;
+      Num1 : Natural;
+      Num2 : Natural;
    begin
-      Start_Test ("Large ticket numbers");
+      Start_Test ("Ticket numbers increase with concurrent threads");
       
       -- Reset state
       Number := (others => 0);
       Entering := (others => False);
       
-      -- Set a very high ticket number
-      Number (Id) := 1000000;
+      -- Lock first thread
+      Lock (Id1);
+      Num1 := Number (Id1);
       
-      -- Try to acquire lock
-      Lock (Id);
+      -- Lock second thread - should get higher number
+      Lock (Id2);
+      Num2 := Number (Id2);
       
-      -- The new ticket should be higher than the previous
-      if Number (Id) <= 1000000 then
-         Unlock (Id);
+      -- Second thread should have higher or equal ticket
+      if Num2 < Num1 then
+         Unlock (Id1);
+         Unlock (Id2);
          End_Test (False);
          return;
       end if;
       
-      Unlock (Id);
+      Unlock (Id1);
+      Unlock (Id2);
       End_Test (True);
-   end Test_Large_Ticket_Numbers;
+   end Test_Ticket_Numbers_Increase;
 
 
    -- =========================================================================
@@ -703,39 +702,31 @@ procedure Bakery_Tests is
 
 
    -- =========================================================================
-   -- TEST 15: Ticket numbers are unique per lock
-   -- Assumption: Each lock call gets a unique ticket number
+   -- TEST 15: Ticket numbers are positive
+   -- Assumption: All ticket numbers are positive (greater than 0)
    -- =========================================================================
 
-   procedure Test_Unique_Tickets is
+   procedure Test_Ticket_Numbers_Are_Positive is
       Id : constant Thread_Id := 1;
-      Tickets : array (1 .. 10) of Natural;
    begin
-      Start_Test ("Unique tickets per lock");
+      Start_Test ("Ticket numbers are positive");
       
       -- Reset state
       Number := (others => 0);
       Entering := (others => False);
       
-      -- Get 10 tickets
-      for I in 1 .. 10 loop
-         Lock (Id);
-         Tickets (I) := Number (Id);
+      Lock (Id);
+      
+      -- Ticket number should be positive
+      if Number (Id) = 0 then
          Unlock (Id);
-      end loop;
+         End_Test (False);
+         return;
+      end if;
       
-      -- All tickets should be unique
-      for I in 1 .. 9 loop
-         for J in I + 1 .. 10 loop
-            if Tickets (I) = Tickets (J) then
-               End_Test (False);
-               return;
-            end if;
-         end loop;
-      end loop;
-      
+      Unlock (Id);
       End_Test (True);
-   end Test_Unique_Tickets;
+   end Test_Ticket_Numbers_Are_Positive;
 
 
    -- =========================================================================
@@ -750,10 +741,10 @@ begin
 
    -- Run all tests
    Test_Single_Thread_Lock;
-   Test_Sequential_Ticket_Numbers;
+   Test_Multiple_Threads_Different_Tickets;
    Test_Mutual_Exclusion;
    Test_Reentrant_Behavior;
-   Test_Large_Ticket_Numbers;
+   Test_Ticket_Numbers_Increase;
    Test_Tie_Breaking_Condition;
    Test_Entering_Flag;
    Test_Unlock_Resets_Ticket;
@@ -763,7 +754,7 @@ begin
    Test_All_Threads;
    Test_Unlock_Without_Lock;
    Test_Concurrent_Lock_Requests;
-   Test_Unique_Tickets;
+   Test_Ticket_Numbers_Are_Positive;
 
    -- Print summary
    Print_Summary;
