@@ -1,14 +1,10 @@
-# Build directories
-obj/
-bin/
-
 # Object files
 *.o
 
 # Ada Library Information
 *.ali
 
-# Executable files
+# Executable files (but not in bin/ directory)
 bakery
 bakery_tests
 
@@ -20,3 +16,6 @@ bakery_tests
 .idea/
 .vscode/
 *.iml
+
+# Note: obj/ and bin/ directories are tracked with .gitkeep files
+# to ensure they exist when users clone the repository

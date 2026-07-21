@@ -1,6 +1,6 @@
 # Makefile for Ada Lamport Bakery Algorithm
 
-.PHONY: all clean test run
+.PHONY: all clean test run build build-tests run-tests
 
 # Default target
 all: build
@@ -15,7 +15,7 @@ test: build-tests run-tests
 
 build-tests:
 	mkdir -p obj bin
-	gnatmake -P tests/bakery_tests.gpr
+	gnatmake -P bakery_tests.gpr
 
 run-tests: build-tests
 	./bin/bakery_tests
@@ -24,9 +24,10 @@ run-tests: build-tests
 run: build
 	./bin/bakery
 
-# Clean build artifacts
+# Clean build artifacts (but keep .gitkeep files)
 clean:
-	rm -rf obj bin
+	find obj -type f ! -name '.gitkeep' -delete
+	find bin -type f ! -name '.gitkeep' -delete
 
 # Rebuild everything
 rebuild: clean all
