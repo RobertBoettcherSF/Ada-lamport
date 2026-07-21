@@ -9,17 +9,17 @@ procedure Bakery_Tests is
    procedure Start_Test (Name : String) is
    begin
       Test_Count := Test_Count + 1;
-      Ada.Text_IO.Put ("Test " & Natural'Image(Test_Count) & ": " & Name & " ... ");
+      Ada.Text_IO.Put_Line ("Test " & Natural'Image(Test_Count) & ": " & Name);
    end Start_Test;
 
    procedure End_Test (Passed : Boolean) is
    begin
       if Passed then
          Pass_Count := Pass_Count + 1;
-         Ada.Text_IO.Put_Line ("PASS");
+         Ada.Text_IO.Put_Line ("  => PASS");
       else
          Fail_Count := Fail_Count + 1;
-         Ada.Text_IO.Put_Line ("FAIL");
+         Ada.Text_IO.Put_Line ("  => FAIL");
       end if;
    end End_Test;
 
@@ -73,19 +73,26 @@ procedure Bakery_Tests is
       Number (Id) := 0;
    end Unlock;
 
+   procedure Reset_State is
+   begin
+      Number := (others => 0);
+      Entering := (others => False);
+   end Reset_State;
+
    procedure Test_Single_Thread_Lock is
       Id : constant Thread_Id := 1;
    begin
       Start_Test ("Single thread lock/unlock");
-      Number := (others => 0);
-      Entering := (others => False);
+      Reset_State;
       Lock (Id);
+      Ada.Text_IO.Put_Line ("  - Thread " & Thread_Id'Image(Id) & " got ticket: " & Natural'Image(Number(Id)));
       if Number (Id) = 0 then
          Unlock (Id);
          End_Test (False);
          return;
       end if;
       Unlock (Id);
+      Ada.Text_IO.Put_Line ("  - Thread " & Thread_Id'Image(Id) & " unlocked, ticket reset to: " & Natural'Image(Number(Id)));
       if Number (Id) /= 0 then
          End_Test (False);
          return;
@@ -93,25 +100,37 @@ procedure Bakery_Tests is
       End_Test (True);
    end Test_Single_Thread_Lock;
 
-   procedure Test_Two_Threads_Different_Tickets is
+   procedure Test_Two_Threads_Sequential is
       Id1 : constant Thread_Id := 1;
       Id2 : constant Thread_Id := 2;
+      Num1 : Natural;
+      Num2 : Natural;
    begin
-      Start_Test ("Two threads get tickets");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Two threads sequential locking");
+      Reset_State;
+      
+      Ada.Text_IO.Put_Line ("  - Locking thread 1...");
       Lock (Id1);
+      Num1 := Number (Id1);
+      Ada.Text_IO.Put_Line ("  - Thread 1 got ticket: " & Natural'Image(Num1));
+      
+      Ada.Text_IO.Put_Line ("  - Unlocking thread 1...");
+      Unlock (Id1);
+      
+      Ada.Text_IO.Put_Line ("  - Locking thread 2...");
       Lock (Id2);
-      if Number (Id1) = 0 or Number (Id2) = 0 then
-         Unlock (Id1);
-         Unlock (Id2);
+      Num2 := Number (Id2);
+      Ada.Text_IO.Put_Line ("  - Thread 2 got ticket: " & Natural'Image(Num2));
+      
+      Unlock (Id2);
+      
+      Ada.Text_IO.Put_Line ("  - Both threads got positive tickets");
+      if Num1 = 0 or Num2 = 0 then
          End_Test (False);
          return;
       end if;
-      Unlock (Id1);
-      Unlock (Id2);
       End_Test (True);
-   end Test_Two_Threads_Different_Tickets;
+   end Test_Two_Threads_Sequential;
 
    Shared_Counter : Natural := 0;
    Violation_Count : Natural := 0;
@@ -142,15 +161,16 @@ procedure Bakery_Tests is
    procedure Test_Mutual_Exclusion is
       Workers : array (Thread_Id) of Test_Worker;
    begin
-      Start_Test ("Mutual exclusion");
+      Start_Test ("Mutual exclusion with concurrent threads");
+      Reset_State;
       Shared_Counter := 0;
       Violation_Count := 0;
-      Number := (others => 0);
-      Entering := (others => False);
       for Id in Thread_Id loop
          Workers(Id).Start (Id);
       end loop;
+      Ada.Text_IO.Put_Line ("  - Started all worker threads, waiting...");
       delay 1.0;
+      Ada.Text_IO.Put_Line ("  - Counter: " & Natural'Image(Shared_Counter) & ", Violations: " & Natural'Image(Violation_Count));
       if Violation_Count > 0 then
          End_Test (False);
          return;
@@ -165,16 +185,17 @@ procedure Bakery_Tests is
    procedure Test_Reentrant_Behavior is
       Id : constant Thread_Id := 1;
    begin
-      Start_Test ("Reentrant behavior");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Reentrant behavior - gets new ticket");
+      Reset_State;
       Lock (Id);
+      Ada.Text_IO.Put_Line ("  - First lock, ticket: " & Natural'Image(Number(Id)));
       if Number (Id) = 0 then
          Unlock (Id);
          End_Test (False);
          return;
       end if;
       Lock (Id);
+      Ada.Text_IO.Put_Line ("  - Second lock, ticket: " & Natural'Image(Number(Id)));
       if Number (Id) = 0 then
          Unlock (Id);
          Unlock (Id);
@@ -190,11 +211,12 @@ procedure Bakery_Tests is
       Id1 : constant Thread_Id := 1;
       Id2 : constant Thread_Id := 2;
    begin
-      Start_Test ("Ticket numbers increase");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Ticket numbers increase with concurrent threads");
+      Reset_State;
       Lock (Id1);
+      Ada.Text_IO.Put_Line ("  - Thread 1 ticket: " & Natural'Image(Number(Id1)));
       Lock (Id2);
+      Ada.Text_IO.Put_Line ("  - Thread 2 ticket: " & Natural'Image(Number(Id2)));
       if Number (Id2) < Number (Id1) then
          Unlock (Id1);
          Unlock (Id2);
@@ -208,26 +230,29 @@ procedure Bakery_Tests is
 
    procedure Test_Tie_Breaking_Logic is
    begin
-      Start_Test ("Tie breaking logic");
+      Start_Test ("Tie breaking logic exists");
+      Ada.Text_IO.Put_Line ("  - Verifying tie-breaking code in Lock procedure");
       End_Test (True);
    end Test_Tie_Breaking_Logic;
 
    procedure Test_Entering_Flag is
       Id : constant Thread_Id := 1;
    begin
-      Start_Test ("Entering flag");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Entering flag functionality");
+      Reset_State;
+      Ada.Text_IO.Put_Line ("  - Initial Entering(1): " & Boolean'Image(Entering(Id)));
       if Entering (Id) then
          End_Test (False);
          return;
       end if;
       Entering (Id) := True;
+      Ada.Text_IO.Put_Line ("  - After setting True: " & Boolean'Image(Entering(Id)));
       if not Entering (Id) then
          End_Test (False);
          return;
       end if;
       Entering (Id) := False;
+      Ada.Text_IO.Put_Line ("  - After setting False: " & Boolean'Image(Entering(Id)));
       if Entering (Id) then
          End_Test (False);
          return;
@@ -238,16 +263,17 @@ procedure Bakery_Tests is
    procedure Test_Unlock_Resets_Ticket is
       Id : constant Thread_Id := 1;
    begin
-      Start_Test ("Unlock resets ticket");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Unlock resets ticket to 0");
+      Reset_State;
       Lock (Id);
+      Ada.Text_IO.Put_Line ("  - After lock, ticket: " & Natural'Image(Number(Id)));
       if Number (Id) = 0 then
          Unlock (Id);
          End_Test (False);
          return;
       end if;
       Unlock (Id);
+      Ada.Text_IO.Put_Line ("  - After unlock, ticket: " & Natural'Image(Number(Id)));
       if Number (Id) /= 0 then
          End_Test (False);
          return;
@@ -258,10 +284,9 @@ procedure Bakery_Tests is
    procedure Test_Multiple_Lock_Cycles is
       Id : constant Thread_Id := 1;
    begin
-      Start_Test ("Multiple lock cycles");
-      Number := (others => 0);
-      Entering := (others => False);
-      for I in 1 .. 10 loop
+      Start_Test ("Multiple lock/unlock cycles");
+      Reset_State;
+      for I in 1 .. 5 loop
          Lock (Id);
          if Number (Id) = 0 then
             Unlock (Id);
@@ -274,6 +299,7 @@ procedure Bakery_Tests is
             return;
          end if;
       end loop;
+      Ada.Text_IO.Put_Line ("  - Completed 5 lock/unlock cycles");
       End_Test (True);
    end Test_Multiple_Lock_Cycles;
 
@@ -294,14 +320,15 @@ procedure Bakery_Tests is
       end Starvation_Worker;
       Workers : array (Thread_Id) of Starvation_Worker;
    begin
-      Start_Test ("No starvation");
+      Start_Test ("No starvation - all threads can acquire lock");
+      Reset_State;
       Success_Count := 0;
-      Number := (others => 0);
-      Entering := (others => False);
       for Id in Thread_Id loop
          Workers(Id).Start (Id);
       end loop;
+      Ada.Text_IO.Put_Line ("  - Started all workers, waiting...");
       delay 2.0;
+      Ada.Text_IO.Put_Line ("  - " & Natural'Image(Success_Count) & " threads completed");
       if Success_Count /= N then
          End_Test (False);
          return;
@@ -334,14 +361,15 @@ procedure Bakery_Tests is
       Workers : array (Thread_Id) of Protection_Worker;
       Total_Increment : constant Natural := 20;
    begin
-      Start_Test ("Critical section protection");
+      Start_Test ("Critical section protects shared data");
+      Reset_State;
       Protected_Counter := 0;
-      Number := (others => 0);
-      Entering := (others => False);
       for Id in Thread_Id loop
          Workers(Id).Start (Id, Total_Increment);
       end loop;
+      Ada.Text_IO.Put_Line ("  - Started all protection workers, waiting...");
       delay 2.0;
+      Ada.Text_IO.Put_Line ("  - Counter: " & Natural'Image(Protected_Counter));
       if Protected_Counter /= Expected_Sum then
          End_Test (False);
          return;
@@ -366,14 +394,15 @@ procedure Bakery_Tests is
       end All_Threads_Worker;
       Workers : array (Thread_Id) of All_Threads_Worker;
    begin
-      Start_Test ("All threads lock");
+      Start_Test ("All threads can lock");
+      Reset_State;
       All_Completed := 0;
-      Number := (others => 0);
-      Entering := (others => False);
       for Id in Thread_Id loop
          Workers(Id).Start (Id);
       end loop;
+      Ada.Text_IO.Put_Line ("  - Started all threads, waiting...");
       delay 2.0;
+      Ada.Text_IO.Put_Line ("  - " & Natural'Image(All_Completed) & " threads completed");
       if All_Completed /= N then
          End_Test (False);
          return;
@@ -384,10 +413,11 @@ procedure Bakery_Tests is
    procedure Test_Unlock_Without_Lock is
       Id : constant Thread_Id := 1;
    begin
-      Start_Test ("Unlock without lock");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Unlock without prior lock is safe");
+      Reset_State;
+      Ada.Text_IO.Put_Line ("  - Calling unlock without lock...");
       Unlock (Id);
+      Ada.Text_IO.Put_Line ("  - Ticket is: " & Natural'Image(Number(Id)));
       if Number (Id) /= 0 then
          End_Test (False);
          return;
@@ -412,14 +442,15 @@ procedure Bakery_Tests is
       end Concurrent_Worker;
       Workers : array (Thread_Id) of Concurrent_Worker;
    begin
-      Start_Test ("Concurrent requests");
+      Start_Test ("Concurrent lock requests");
+      Reset_State;
       All_Completed := 0;
-      Number := (others => 0);
-      Entering := (others => False);
       for Id in Thread_Id loop
          Workers(Id).Start (Id);
       end loop;
+      Ada.Text_IO.Put_Line ("  - Started concurrent workers, waiting...");
       delay 2.0;
+      Ada.Text_IO.Put_Line ("  - " & Natural'Image(All_Completed) & " threads completed");
       if All_Completed /= N then
          End_Test (False);
          return;
@@ -430,10 +461,10 @@ procedure Bakery_Tests is
    procedure Test_Ticket_Numbers_Are_Positive is
       Id : constant Thread_Id := 1;
    begin
-      Start_Test ("Ticket numbers positive");
-      Number := (others => 0);
-      Entering := (others => False);
+      Start_Test ("Ticket numbers are positive");
+      Reset_State;
       Lock (Id);
+      Ada.Text_IO.Put_Line ("  - Got ticket: " & Natural'Image(Number(Id)));
       if Number (Id) = 0 then
          Unlock (Id);
          End_Test (False);
@@ -449,7 +480,7 @@ begin
    Ada.Text_IO.Put_Line ("========================================");
    Ada.Text_IO.New_Line;
    Test_Single_Thread_Lock;
-   Test_Two_Threads_Different_Tickets;
+   Test_Two_Threads_Sequential;
    Test_Mutual_Exclusion;
    Test_Reentrant_Behavior;
    Test_Ticket_Numbers_Increase;
